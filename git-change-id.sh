@@ -103,16 +103,24 @@ handle_args() {
   fi
 }
 
+verified_push() {
+  git push -u origin HEAD --force -q
+
+  if [[ $? != "0" ]]; then
+    echo -e "${RED}Pushing failed!${CLEAR}"
+  else 
+    echo -e "${GREEN}Pushed!${CLEAR}"
+  fi
+}
+
 push_changes() {
   if $PUSH; then 
-    git push --force  
-    echo -e "${GREEN}Pushed!${CLEAR}"
+   verified_push 
   else  
     read -p "Push changes? (y/n) " answer
     case $answer in
       [yY]*) 
-        git push --force
-        echo -e "${GREEN}Pushed!${CLEAR}"
+        verified_push
       ;;
     esac
   fi
@@ -136,7 +144,7 @@ change_id() {
   for mail in $OLD; do
     echo "$NAME <$NEW> <$mail>" >> "./.mailmap"
   done
-  python3 $LOCAL_PATH/git-filter-repo.py --use-mailmap --force  #> /dev/null 2>&1
+  python3 $LOCAL_PATH/git-filter-repo.py --use-mailmap --force  > /dev/null 2>&1
   
   if [[ $? != "0" ]]; then
     echo -e "${RED}Exception while changing history.${CLEAR}"
