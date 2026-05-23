@@ -24,7 +24,7 @@ GREEN='\033[0;32m'
 CLEAR='\033[0m'
 
 ARGS="$@"
-LOCAL_PATH="$(pwd)"
+LOCAL_PATH="$(pwd | sed 's#/[^/]*$##')"
 
 PUSH=false
 METHOD=""
@@ -37,6 +37,10 @@ CLEANUP=false
 
 parse_args() {
   for arg in $1; do
+    if [[ "$arg" == "#"* ]]; then
+      continue
+    fi
+
     case "$arg" in
       --push|push) 
         PUSH=true
@@ -93,17 +97,13 @@ handle_args() {
     NAME=$GITHUB
   fi
 
-  if [[ $CHECK = "false" && (  -z "$NAME" || -z "$OLD" || -z "$NEW" ) ]]; then
+  if [[ $CHECK == "false" && (  -z "$NAME" || -z "$OLD" || -z "$NEW" ) ]]; then
     echo -e "${RED}You need to set name, old and new if you want to change sth!${CLEAR}"
     exit 1
   fi
 }
 
 push_changes() {
-  if [[ $METHOD = "" ]]; then 
-    rm $LOCAL_PATH/git-filter-repo.py
-  fi
-
   if $PUSH; then 
     git push --force  
     echo -e "${GREEN}Pushed!${CLEAR}"
@@ -123,20 +123,20 @@ reset_repo() {
   branch=$2
 
   rm ./.mailmap
-  #reset head
   echo "$config" > ./.git/config
-  
-  git fetch origin
+  git fetch origin -q
 }
 
 change_id() {
   config=$(cat ./.git/config)
   branch=$(git branch --show-current)
 
+  git stash -q
+
   for mail in $OLD; do
     echo "$NAME <$NEW> <$mail>" >> "./.mailmap"
   done
-  python3 $LOCAL_PATH/git-filter-repo.py --use-mailmap --force  > /dev/null 2>&1
+  python3 $LOCAL_PATH/git-filter-repo.py --use-mailmap --force  #> /dev/null 2>&1
   
   if [[ $? != "0" ]]; then
     echo -e "${RED}Exception while changing history.${CLEAR}"
@@ -148,17 +148,33 @@ change_id() {
   push_changes;
 }
 
-run_action() {   
-  cd $1
+check_branches() {
+  branches="$(git branch -r | grep -v 'origin/HEAD ->' )"
+  
+  for branch in $branches; do 
+    git stash -q
+    git switch ${branch#origin/} -q 
 
-  if [ ! -d "$dir/.git" ]; then
-     echo "$1 does not contain a git repo."
-  else 
+    echo "($branch):"
+    
     if $CHECK; then 
       git log --pretty=format:%ae | sort -u
     else
       change_id
     fi
+
+    echo ""
+  done  
+}
+
+run_action() {   
+  dir=$1
+  cd $dir
+
+  if [ ! -d "$dir/.git" ]; then
+     echo "$dir does not contain a git repo."
+  else 
+    check_branches
   fi
 }
 
@@ -226,6 +242,6 @@ case $METHOD in
   ;;
 esac
 
-if [[ $CHECK = "false" && -n $METHOD ]]; then
+if [[ $CHECK == "false" && -n $METHOD ]]; then
   rm $LOCAL_PATH/git-filter-repo.py
 fi
