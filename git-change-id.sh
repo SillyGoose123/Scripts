@@ -187,7 +187,8 @@ run_action() {
 }
 
 clean_up() {
-  cd $LOCAL_PATH
+  cd ../..
+
   if $CLEANUP; then 
     rm -rf cloned-repos 
   else  
